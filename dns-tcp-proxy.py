@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # if you want to change default DNS server in Windows for all applications,
 # you should consider the following command
-### netsh interface ip set dns "������������" static 127.0.0.1 primary
+### netsh interface ip set dns "mydns" static 127.0.0.1 primary
 
 # if you want to do the same in Linux,
 # you should edit /etc/resolv.conf file and add your dns proxy address
