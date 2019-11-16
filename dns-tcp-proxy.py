@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # if you want to change default DNS server in Windows for all applications,
 # you should consider the following command
 ### netsh interface ip set dns "������������" static 127.0.0.1 primary
@@ -50,6 +49,18 @@ def get_arguments():
                              'The option should be given in the following format: "socks5://127.0.0.1:1080". '
                              'If omitted, then no DNS queries are '
                              'going to be proxified.')
+    parser.add_argument('--target-dns-ip',
+                        dest='dns_ip',
+                        default=DNS_SERVERS[random.randint(0, len(DNS_SERVERS) - 1)],
+                        required=False,
+                        help='Specify a custom DNS server to use after all redirects have been done. Default servers '
+                             'is one of the following: ' + "; ".join(DNS_SERVERS))
+    parser.add_argument('--target-dns-port',
+                        dest='dns_port',
+                        default=DEFAULT_DNS_SERVER_PORT,
+                        required=False,
+                        help='Specify a UDP port for the targeted DNS server. '
+                             'Default is ' + str(DEFAULT_DNS_SERVER_PORT))
     return parser.parse_args()
 
 
@@ -71,8 +82,9 @@ class ThreadedUDPRequestHandler(socketserver.BaseRequestHandler):
         udp_sock = self.request[1]
         addr = self.client_address
 
-        dns_ip = DNS_SERVERS[random.randint(0, len(DNS_SERVERS) - 1)]
-        response = query_dns_by_tcp(dns_ip, DEFAULT_DNS_SERVER_PORT, query_data)
+        global target_dns_ip
+        global target_dns_port
+        response = query_dns_by_tcp(target_dns_ip, target_dns_port, query_data)
         if response:
             # udp dns packet no length
             udp_sock.sendto(response[2:], addr)
@@ -104,19 +116,28 @@ def query_dns_by_tcp(dns_ip, dns_port, query_data):
 
 if __name__ == "__main__":
     options = get_arguments()
-    dns_server_ip = options.ip
-    dns_server_port = int(options.port)
+    local_dns_server_ip = options.ip
+    local_dns_server_port = int(options.port)
+
+    target_dns_ip = options.dns_ip
+    target_dns_port = int(options.dns_port)
+
     socks_proxy = options.relay
     if socks_proxy:
         socks_type = socks_proxy.split(':')[0]
         socks_ip = socks_proxy.split('//')[1].split(':')[0]
         socks_port = int(socks_proxy.split(':')[2])
-        print('Starting local DNS relay on udp://{dns_ip}:{dns_port} --> {socks_type}://{socks_ip}:{socks_port}'.format(
-                    dns_ip=dns_server_ip,
-                    dns_port=dns_server_port,
-                    socks_type=socks_type,
-                    socks_ip=socks_ip,
-                    socks_port=socks_port))
+        print(
+                    'Starting local DNS relay on udp://{dns_ip}:{dns_port} '
+                    '--> {socks_type}://{socks_ip}:{socks_port} '
+                    '--> tcp://{target_dns_ip}:{target_dns_port}'.format(
+                                dns_ip=local_dns_server_ip,
+                                dns_port=local_dns_server_port,
+                                socks_type=socks_type,
+                                socks_ip=socks_ip,
+                                socks_port=socks_port,
+                                target_dns_ip=target_dns_ip,
+                                target_dns_port=target_dns_port))
         if socks_type == 'socks5':
             socks.set_default_proxy(socks.PROXY_TYPE_SOCKS5, socks_ip, socks_port)
         elif socks_type == 'socks4':
@@ -125,11 +146,16 @@ if __name__ == "__main__":
             raise Exception("HTTP proxy is not supported")
 
     try:
-        dns_server = ThreadedUDPServer((dns_server_ip, dns_server_port),
+        dns_server = ThreadedUDPServer((local_dns_server_ip, local_dns_server_port),
                                        ThreadedUDPRequestHandler)
-        print('Starting DNS proxy on udp://{dns_server_ip}:{dns_server_port}'
-              .format(dns_server_ip=dns_server_ip,
-                      dns_server_port=dns_server_port))
+        if not socks_proxy:
+            print(
+                        'Starting DNS proxy on udp://{dns_server_ip}:{dns_server_port} '
+                        '--> tcp://{target_dns_ip}:{target_dns_port}'.format(
+                                    dns_server_ip=local_dns_server_ip,
+                                    dns_server_port=local_dns_server_port,
+                                    target_dns_ip=target_dns_ip,
+                                    target_dns_port=target_dns_port))
         dns_server.serve_forever()
     except ConnectionRefusedError:
         print('Local DNS relay failed to establish a connection. Is the proxy address correct?')
