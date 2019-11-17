@@ -46,9 +46,7 @@ def get_arguments():
                         required=False,
                         help='Use this option if you want to tunnel your DNS requests from your local DNS server '
                              'through an additional SOCKS proxy. '
-                             'The option should be given in the following format: "socks5://127.0.0.1:1080". '
-                             'If omitted, then no DNS queries are '
-                             'going to be proxified.')
+                             'The option should be given in the following format: "socks5://127.0.0.1:1080".')
     parser.add_argument('--target-dns-ip',
                         dest='dns_ip',
                         default=DNS_SERVERS[random.randint(0, len(DNS_SERVERS) - 1)],
